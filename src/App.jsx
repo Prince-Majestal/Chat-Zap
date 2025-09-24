@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useEffect } from 'react'
 import NavBar from './NavBar.jsx'
 import MessageArea from './MessageArea.jsx'
 import ChatInput from './ChatInput.jsx'
@@ -7,6 +8,32 @@ function App() {
 
   const [status, changeStatus] = useState("Disconnected")
   const [messages, changeMessages] = useState([])
+
+  useEffect(()=>{
+    const ws = new WebSocket('ws://localhost:3001');
+    ws.onopen = ()=>{
+      console.log("Connection established.");
+    };
+
+    ws.onmessage = (message) =>{
+      console.log("Server sent: ", message.data);
+      ws.send("This is the client. K bye!");
+    };
+
+    ws.onclose = () => {
+      console.log("Connection with server terminated.");
+    };
+
+    return () => {
+      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)
+      {
+        ws.close();
+      }
+    };
+
+      
+  }, []);
+
   let count = 0
   
   
