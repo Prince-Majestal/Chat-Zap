@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useEffect } from 'react'
+import { useRef } from 'react'
 import NavBar from './NavBar.jsx'
 import MessageArea from './MessageArea.jsx'
 import ChatInput from './ChatInput.jsx'
@@ -9,78 +10,81 @@ function App() {
   const [status, changeStatus] = useState("Disconnected")
   const [messages, changeMessages] = useState([])
 
-  useEffect(()=>{
-    const ws = new WebSocket('ws://localhost:3001');
-    ws.onopen = ()=>{
-      console.log("Connection established.");
-    };
-
-    ws.onmessage = (message) =>{
-      console.log("Server sent: ", message.data);
-      ws.send("This is the client. K bye!");
-    };
-
-    ws.onclose = () => {
-      console.log("Connection with server terminated.");
-    };
-
-    return () => {
-      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)
-      {
-        ws.close();
-      }
-    };
-
-      
-  }, []);
-
-  let count = 0
+  const ws = useRef(null)
   
+  const count = useRef(0)
+
+  function createSocket()
+  {
+    if(ws.current)
+      return
+    ws.current = new WebSocket("ws://localhost:3001")
+    
+    ws.current.onopen = () => {
+      changeStatus("Connected");
+      changeMessages([]);
+      console.log("Connected to server")
+    }
+
+    ws.current.onmessage = (message) => {
+      const data = JSON.parse(message.data)
+      console.log("Server sent: ", data.body)
+      handleReceive(data)
+    }
+
+    ws.current.onclose = () => {
+      changeStatus("Disconnected")
+      ws.current = null
+      console.log("Connection with server terminated")
+    }
+  }
   
   function handleStart() //Timeout for temporary purposes
   {
     changeStatus("Searching")
     setTimeout(()=>{
-      changeStatus("Connected");
-      changeMessages([]);
+      try{
+        createSocket()
+      } catch (e) {console.log(e)}
     }, 5000);
     
   }
 
   function handleStop()
   {
-    changeStatus("Disconnected")
+    if (ws.current && (ws.current.readyState === WebSocket.OPEN || ws.current.readyState === WebSocket.CONNECTING))
+        ws.current.close();
+  
   }
 
   function handleNext()
   {
+    ws.current.close()
     changeStatus("Searching")
     setTimeout(()=>{
-      changeStatus("Connected");
-      changeMessages([]);
+      try{
+        createSocket()
+      } catch (e) {console.log(e)}
      }, 5000);
   }
 
-  function handleSend(newMessage)
+  function handleSend(newMessageBody)
   {
-    count = count +1  
+    const newMessage = {id: count.current, from: "Me", body: newMessageBody}
+    ws.current.send(JSON.stringify(newMessage))
+    count.current += 1
     changeMessages(prev => {
-      const next = [...prev, {id: count, from: "Me", body: newMessage}]
+      const next = [...prev, newMessage]
       return next
     })
 
-    //Simulates a response from stranger
-    setTimeout(() => {
-      handleReceive()
-    }, 2000);
-    
   }
 
-  function handleReceive() //Updates state with new message from stranger. Only says "message received" for now.
+  function handleReceive(message) //Updates state with new message from stranger. Only says "message received" for now.
   {
-    count = count +1
+    count.current += 1
     changeMessages(prev => {
-      const next = [...prev, {id: count, from: "Stranger", body: "Message received."}]
+      const next = [...prev, message]
       return next
     })
 
